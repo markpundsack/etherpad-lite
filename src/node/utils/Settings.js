@@ -27,6 +27,7 @@ var npm = require("npm/lib/npm.js");
 var vm = require('vm');
 var log4js = require("log4js");
 var randomString = require('ep_etherpad-lite/static/js/pad_utils').randomString;
+var url = require("url");
 
 
 /* Root path of the installation */
@@ -35,7 +36,7 @@ exports.root = path.normalize(path.join(npm.dir, ".."));
 /**
  * The app title, visible e.g. in the browser window
  */
-exports.title = "Etherpad";
+exports.title = process.env.TITLE || "Etherpad";
 
 /**
  * The app favicon fully specified url, visible e.g. in the browser window
@@ -58,7 +59,7 @@ exports.port = process.env.PORT || 9001;
  * The SSL signed server key and the Certificate Authority's own certificate
  * default case: ep-lite does *not* use SSL. A signed server key is not required in this case.
  */
-exports.ssl = false;
+exports.ssl = process.env.SSL || false;
 
 /**
  * socket.io transport methods
@@ -67,37 +68,46 @@ exports.socketTransportProtocols = ['xhr-polling', 'jsonp-polling', 'htmlfile'];
 
 /*
  * The Type of the database
+ * And the settings passed with dbType to ueberDB to set up the database
  */
-exports.dbType = "dirty";
-/**
- * This setting is passed with dbType to ueberDB to set up the database
- */
-exports.dbSettings = { "filename" : path.join(exports.root, "dirty.db") };
+if (process.env.DATABASE_URL) {
+  var database_url = url.parse(process.env.DATABASE_URL);
+  var auth = database_url.auth.split(":");
+  exports.dbType = database_url.protocol;
+  exports.dbSettings = {  "user" : auth[0],
+                          "password" : auth[1],
+                          "host" : database_url.hostname,
+                          "database" : database_url.pathname};
+} else {
+  exports.dbType = "dirty";
+  exports.dbSettings = { "filename" : "var/dirty.db" };
+}
+
 
 /**
  * The default Text of a new pad
  */
-exports.defaultPadText = "Welcome to Etherpad!\n\nThis pad text is synchronized as you type, so that everyone viewing this page sees the same text. This allows you to collaborate seamlessly on documents!\n\nEtherpad on Github: http:\/\/j.mp/ep-lite\n";
+exports.defaultPadText = process.env.DEFAULTPADTEXT || "Welcome to Etherpad!\n\nThis pad text is synchronized as you type, so that everyone viewing this page sees the same text. This allows you to collaborate seamlessly on documents!\n\nEtherpad on Github: http:\/\/j.mp/ep-lite\n";
 
 /**
  * A flag that requires any user to have a valid session (via the api) before accessing a pad
  */
-exports.requireSession = false;
+exports.requireSession = process.env.REQUIRESESSION || false;
 
 /**
  * A flag that prevents users from creating new pads
  */
-exports.editOnly = false;
+exports.editOnly = process.env.EDITONLY || false;
 
 /**
  * Max age that responses will have (affects caching layer).
  */
-exports.maxAge = 1000*60*60*6; // 6 hours
+exports.maxAge = process.env.MAXAGE || 1000*60*60*6; // 6 hours
 
 /**
  * A flag that shows if minification is enabled or not
  */
-exports.minify = true;
+exports.minify = process.env.MINIFY || true;
 
 /**
  * The path of the abiword executable
@@ -107,7 +117,7 @@ exports.abiword = null;
 /**
  * The log level of log4js
  */
-exports.loglevel = "INFO";
+exports.loglevel = process.env.LOGLEVEL || "INFO";
 
 /*
 * log4js appender configuration
@@ -117,19 +127,19 @@ exports.logconfig = { appenders: [{ type: "console" }]};
 /*
 * Session Key, do not sure this.
 */
-exports.sessionKey = false;
+exports.sessionKey = process.env.SESSIONKEY || false;
 
 /*
 * Trust Proxy, whether or not trust the x-forwarded-for header.
 */
-exports.trustProxy = false;
+exports.trustProxy = process.env.TRUSTPROXY || false;
 
 /* This setting is used if you need authentication and/or
  * authorization. Note: /admin always requires authentication, and
  * either authorization by a module, or a user with is_admin set */
-exports.requireAuthentication = false;
-exports.requireAuthorization = false;
-exports.users = {};
+exports.requireAuthentication = process.env.REQUIREAUTHENTICATION || false;
+exports.requireAuthorization = process.env.REQUIREAUTHORIZATION || false;
+exports.users = (process.env.USERS)?JSON.parse(process.env.USERS):{};
 
 //checks if abiword is avaiable
 exports.abiwordAvailable = function()
@@ -154,7 +164,7 @@ exports.reloadSettings = function reloadSettings() {
     //read the settings sync
     settingsStr = fs.readFileSync(settingsFilename).toString();
   } catch(e){
-    console.warn('No settings file found. Continuing using defaults!');
+    console.warn('No settings file found. Continuing using defaults and/or environment!');
   }
 
   // try to parse the settings
